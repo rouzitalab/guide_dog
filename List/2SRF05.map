@@ -1,0 +1,19 @@
+RAM Allocation
+Variable                                                          Address   Size
+--------------------------------------------------------------------------------
+intFlag                                                           0x0260       1
+intFlag                                                           0x0261       1
+_seed                                                             0x0262       4
+
+EEPROM Allocation
+Variable                                                          Address   Size
+--------------------------------------------------------------------------------
+
+Register Allocation
+Variable                                                          Register  Size
+--------------------------------------------------------------------------------
+counterVal                                                        R4,R5        2
+sonar1Busy                                                        R7           1
+sonar2Busy                                                        R6           1
+sonar1DataValid                                                   R9           1
+sonar2DataValid                                                   R8           1

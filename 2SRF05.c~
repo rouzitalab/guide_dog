@@ -1,0 +1,199 @@
+#include <mega32.h>
+//#include <alcd.h>
+#include <stdio.h>
+#include <delay.h>
+
+unsigned int counterVal = 0;
+char sonar1Busy, sonar2Busy = 0;
+char sonar1DataValid, sonar2DataValid = 0;
+
+interrupt [EXT_INT1] void ext_int1_isr(void)
+{
+    static char intFlag = 0;
+    if(!intFlag){
+        MCUCR &= ~(1<<2);         //setting INT1 on the falling edge       => check with MCUCR = 0x08 (original 0x0b)
+        intFlag = 1;
+        TCNT1 = 0x00;         // the TCNT1 register is cleared  (increments with each clock pulse)
+        TCCR1B = 0x01;        // timer/counter enabled [frequency set to Xtal freq (16MHz)]
+    }else{
+        TCCR1B = 0x00;        // timer/counter disabled
+        MCUCR |= (1<<2);
+        intFlag = 0;
+        counterVal = TCNT1;
+        sonar1Busy = 0;
+        sonar1DataValid = 1;
+    }
+}
+
+interrupt [EXT_INT0] void ext_int0_isr(void)
+{
+    static char intFlag = 0;
+    if(!intFlag){
+        MCUCR &= ~(1<<0);         //setting INT0 on the falling edge       
+        intFlag = 1;
+        TCNT1 = 0x00;         // the TCNT1 register is cleared  (increments with each clock pulse)
+        TCCR1B = 0x01;        // timer/counter enabled [frequency set to Xtal freq (16MHz)]
+    }else{
+        TCCR1B = 0x00;        // timer/counter disabled
+        MCUCR |= (1<<0);
+        intFlag = 0;
+        counterVal = TCNT1;
+        sonar2Busy = 0;
+        sonar2DataValid = 1;
+    }
+}
+
+interrupt [TIM1_OVF] void timer1_ovf_isr(void)      /// bayad shart bezarim ke befahme kodoomo 0 kone      ***???***
+{
+    sonar1Busy = 0;
+    sonar1DataValid = 0; 
+    sonar2Busy = 0;
+    sonar2DataValid = 0;
+}
+
+void trig1(){                 //aparently this sonar triggers on the low level
+    PORTB &= ~(1<<0);       //set bit 0 to 0
+    delay_us(20);            
+    PORTB |= (1<<0);        //set bit 0 to 1
+    sonar1Busy = 1;
+}
+void trig2(){                 //aparently this sonar triggers on the low level
+    PORTB &= ~(1<<1);       //set bit 1 to 0
+    delay_us(20);            
+    PORTB |= (1<<1);        //set bit 1 to 1
+    sonar2Busy = 1;
+}
+  
+void move(char direction)
+{
+    if(direction == 'l') PORTC = 0b00001010;
+    else if(direction == 'r') PORTC = 0b00000101; 
+    else if(direction == 'f') PORTC = 0b00001001;
+    else if(direction == 'b') PORTC = 0b00000110;
+}
+
+float dist_calc(unsigned char sonar_num)
+{
+    float distance;
+    if (sonar_num == 1)
+    {
+        trig1();
+        #asm("sei")             
+        while(sonar1Busy);       
+        if(sonar1DataValid){
+            #asm("cli")         
+            distance = counterVal/16.0;    
+            distance = distance/56.0; 
+        }
+    }
+    else 
+    { 
+        trig2();
+        #asm("sei")             
+        while(sonar2Busy);       
+        if(sonar2DataValid){
+            #asm("cli")
+            distance = counterVal/16.0;    
+            distance = distance/56.0;
+        }
+    }
+    return distance;
+}
+  
+/*void main(void)
+{
+    
+    // Input/Output Ports initialization
+    // Port A initialization
+    // Func7=In Func6=In Func5=In Func4=In Func3=In Func2=In Func1=In Func0=In 
+    // State7=T State6=T State5=T State4=T State3=T State2=T State1=T State0=T 
+    PORTA=0x00;
+    DDRA=0x00;
+
+    // Port B initialization
+    // Func7=In Func6=In Func5=In Func4=In Func3=In Func2=In Func1=Out Func0=Out 
+    // State7=T State6=T State5=T State4=T State3=T State2=T State1=0 State0=0 
+    PORTB=0x00;
+    DDRB=0x03;
+
+    // Port C initialization
+    // Func7=In Func6=In Func5=In Func4=In Func3=Out Func2=Out Func1=Out Func0=Out 
+    // State7=T State6=T State5=T State4=T State3=0 State2=0 State1=0 State0=0 
+    PORTC=0x00;
+    DDRC=0x0F;
+
+    // Port D initialization
+    // Func7=In Func6=In Func5=In Func4=In Func3=In Func2=In Func1=In Func0=In 
+    // State7=T State6=T State5=T State4=T State3=T State2=T State1=T State0=T 
+    PORTD=0x00;
+    DDRD=0x00;  
+    
+    // Timer/Counter 1 initialization
+    // Clock source: System Clock
+    // Clock value: Timer1 Stopped
+    // Mode: Normal top=0xFFFF
+    // OC1A output: Discon.
+    // OC1B output: Discon.
+    // Noise Canceler: Off
+    // Input Capture on Falling Edge
+    // Timer1 Overflow Interrupt: Off
+    // Input Capture Interrupt: Off
+    // Compare A Match Interrupt: Off
+    // Compare B Match Interrupt: Off
+    TCCR1A=0x00;
+    TCCR1B=0x00;
+    TCNT1H=0x00;
+    TCNT1L=0x00;
+    ICR1H=0x00;
+    ICR1L=0x00;
+    OCR1AH=0x00;
+    OCR1AL=0x00;
+    OCR1BH=0x00;
+    OCR1BL=0x00;
+
+    // External Interrupt(s) initialization
+    // INT0: On
+    // INT1: On
+    // INT1 Mode: Rising Edge
+    // INT2: Off
+    GICR|=0xC0;                    //enable INT1 and INT0
+    MCUCR=0x0F;                    // set both on rising edge
+    MCUCSR=0x00;
+    GIFR=0xC0;                     // INT1 and INT0 FLAG
+     
+    DDRB |= (1<<0);        //set PB0 to output [attached to sonar1 trig]
+    DDRB |= (1<<1);        //set PB1 to output [attached to sonar2 trig]
+
+    TIMSK=0x04;            //enable timer overflow interupt
+       
+    while(1)
+    {    
+     /******************mesal***************/
+     move('f');
+     while(dist_calc(1)<20);
+     while(dist_calc(1)<20)
+     {
+         move('r');
+         delay_ms(100);
+         move('f');
+         delay_ms(100);
+         move('l');
+         delay_ms(100);
+     }  
+    }                 
+  
+}
+*/
+
+        /*
+        trig2();
+        #asm("sei")             //enable interupts
+        while(sonar2Busy);       //goes to INT0 when sonar sends pulse (PD4 INT0 rising edge)
+        if(sonar2DataValid){
+            #asm("cli")         //disable interupts (there might be a noise signal which takes the program
+                                // to an interupt routine again before previous calculations are done)
+            distance2 = counterVal/16.0;     //micro seconds that took the signal to come back to the sonar since it was transmitted
+            distance2 = distance2/56.0;       //calculating distance => try 58 (for temperature 23)
+            printf("d2: %f\n\r",distance2);
+        } 
+        */
